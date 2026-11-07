@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+
+id = "partyline_relay"
+version = "0.1.0"
+name = "Partyline Relay"
+tagline = "Let a Partyline agent run Python here, only after you allow it"
+maintainer = "High AiQ"
+type = "add-on"
+
+blender_version_min = "5.0.0"
+license = ["SPDX:MIT"]
+tags = ["System"]
+
+[permissions]
+network = "Listens on 127.0.0.1 only, for the local Partyline helper"
+files = "Discovery file for the helper; backup copy of the open .blend"
