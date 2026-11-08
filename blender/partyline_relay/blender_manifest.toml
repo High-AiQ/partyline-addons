@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "partyline_relay"
-version = "0.2.0"
+version = "0.3.0"
 name = "Partyline Relay"
 tagline = "Let a Partyline agent run Python here, only after you allow it"
 maintainer = "High AiQ"

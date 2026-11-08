@@ -18,6 +18,7 @@ class Obj:
         self.location, self.rotation_euler, self.scale = (1.0, 2.0, 3.0), (0, 0, 0), (1, 1, 1)
         self.dimensions, self.modifiers, self.material_slots = (2, 2, 2), [], []
         self.matrix_world = Matrix()
+        self.data = types.SimpleNamespace(clip_start=0.1, clip_end=100.0)
         self.bound_box = [(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
 
 
