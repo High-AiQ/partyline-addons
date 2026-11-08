@@ -9,6 +9,8 @@ Download `partyline_relay-<version>.zip` from the CI artifacts (or build it: `py
 in Blender: Edit > Preferences > Get Extensions > the drop-down arrow > **Install from Disk**. The add-on has no
 settings. It does nothing until the Partyline helper on this computer opens a session.
 
+For parallel scene building, use the [Blender scene decomposition skill](../skills/blender-scene-decomposition/SKILL.md).
+
 ## What happens
 
 1. The add-on listens on `127.0.0.1` (a random port, never a network address) and writes `blender-relay.json`
