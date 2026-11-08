@@ -45,6 +45,14 @@ settings. It does nothing until the Partyline helper on this computer opens a se
   deadline, a cancel and a killed session take effect when it returns, and the image is then discarded, not handed
   over. `screenshot` draws the 3D viewport with `gpu.types.GPUOffScreen` (needs the GPU; up to 1600 px on the long
   edge); for the whole window use Partyline's `screen_frame`.
+* `scene_info` with `project_to_camera: true` adds a `projection` of geometry checks used as evidence when a render
+  is checked: for each mesh, where it lies in the camera frame (`inside`, `tight`, `cut`, `outside`, with margins);
+  for each pair whose boxes meet, `clear`, `intersecting` (with the depth), `contained` or `unsupported`; and, for
+  `supports: {"cup": "table"}`, whether an object `supports`ed, hovers (`floating`, with the gap) or is
+  `unsupported`. The camera, `width`, `height`, `margin` (a fraction of the frame, default 0.02) and `tolerance`
+  (scene units, default 0.005) are reported as used. These are heuristics (gravity is -Z, evaluated meshes, a
+  support is one named object): resting contact, open or leaning shapes, hidden objects, geometry nodes, instances
+  and particles come back `unsupported`, never as a pass, so the render goes to visual review instead.
 * Telemetry: none. Nothing leaves this computer from the add-on.
 
 ## HTTP API (for the helper)

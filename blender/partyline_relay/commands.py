@@ -12,6 +12,7 @@ import sys
 import traceback
 from pathlib import Path
 
+from .geometry import project
 from .render import render
 from .screenshot import screenshot
 
@@ -253,6 +254,8 @@ def scene_info(bpy, args):
             info["truncated"] = True
     else:
         return {"ok": False, "error": failure("BadDetail", "detail is summary, objects or object")}
+    if args.get("project_to_camera") is True:
+        info["projection"] = project(bpy, args)
     return {"ok": True, "scene": info}
 
 
