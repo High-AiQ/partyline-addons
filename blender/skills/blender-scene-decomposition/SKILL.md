@@ -31,19 +31,12 @@ The image-model steps below are **optional external preparation**, not part of t
 add-on. When using them, follow this order and retain the exact mockup as the final
 composition reference.
 
-**Room and camera.** Give the exact mockup to an image-editing model and ask it to
-remove all furniture, props, cables and loose items while keeping the camera angle,
-framing, resolution and architecture identical. Overlay the empty-room edit on the
-original at identical resolution: wall, floor, ceiling and door edges must coincide.
-Reject and redo an edit that moves those edges before using it for measurements.
-
-Run a single-image metric depth/camera model such as MoGe-2 on the **empty room**.
-Use its depth and camera estimates to recover the FOV and camera pose, fit the floor,
-wall and ceiling planes, and measure room dimensions. Check the metric scale against
-a known-size architectural anchor and record the estimated dimensions and uncertainty.
-Lock the hero camera from this reconstruction. Use the empty room because props occlude
-the architectural planes and corrupt the plane fits; do not estimate the room from a
-furnished reconstruction and assume its planes are reliable.
+**Room and camera.** Run a single-image metric depth/camera model such as MoGe-2 on the
+exact mockup. Use its depth and camera estimates to recover the FOV and camera pose, fit
+the floor, wall and ceiling planes from regions that props do not cover, and measure
+room dimensions. Check the metric scale against a known-size architectural anchor,
+record the estimated dimensions and uncertainty, and lock the hero camera from this
+reconstruction.
 
 **Prop references (optional).** If an image-to-3D reference would help a piece, never
 crop that object out of the mockup for the model. Instead, use an image-editing model,
@@ -57,7 +50,7 @@ from the metric room or a known anchor in it, never from the generated mesh itse
 Keep the generated reference out of acceptance renders and delivered piece files.
 
 Do **not** run image-to-3D on the whole mockup. Its scale is not metric, and a trial
-produced incorrect room proportions. Recover the room from the empty-room metric
+produced incorrect room proportions. Recover the room from the metric depth
 reconstruction and build the architectural geometry cleanly instead.
 
 **Build the clean blockout, then iterate by overlay.** With the hero camera established,
