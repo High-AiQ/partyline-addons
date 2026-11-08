@@ -13,11 +13,10 @@ Read [local tools](https://github.com/High-AiQ/partyline/blob/main/docs/local-to
 [Blender Python relay](https://github.com/High-AiQ/partyline/blob/main/docs/design/blender-python-relay.md) for design context.
 When the host has Blender and the deliverable is files, workers run it locally
 (`blender -b <file> -P <script.py>`); no relay session is needed. The relay is for a
-paired person's machine: use `blender_request` and wait for a granted session before
-relay calls. Use `blender_exec` for bounded modelling, file and collection operations;
-`blender_scene_info` for inspection; `blender_render` for acceptance images; and
-`blender_screenshot` for viewport inspection. A viewport capture supplements the renders.
-Fetch returned image references with `get_media` and look at the pixels.
+paired person's machine: use `blender_request` and wait for a granted session. Use
+`blender_exec` for bounded modelling and file operations, `blender_scene_info` for
+inspection, `blender_render` for acceptance images and `blender_screenshot` for viewport
+checks (a supplement to renders). Fetch returned images with `get_media` and look at the pixels.
 
 ## Freeze the shared frame
 
@@ -32,50 +31,43 @@ add-on. When using them, follow this order and retain the exact mockup as the fi
 composition reference.
 
 **Room and camera.** Run a single-image metric depth/camera model such as MoGe-2 on the
-exact mockup. Use its depth and camera estimates to recover the FOV and camera pose, fit
-the floor, wall and ceiling planes from regions that props do not cover, and measure
-room dimensions. Check the metric scale against a known-size architectural anchor,
-record the estimated dimensions and uncertainty, and lock the hero camera from this
-reconstruction.
+exact mockup. Use its estimates to recover the FOV and camera pose, fit floor, wall and
+ceiling planes from regions that props do not cover, and measure room dimensions. Check
+the metric scale against a known-size architectural anchor, record the estimated
+dimensions and uncertainty, and lock the hero camera from this reconstruction.
 
 **Prop references (optional).** If an image-to-3D reference would help a piece, never
-crop that object out of the mockup for the model. Instead, use an image-editing model,
-with the mockup as reference, to generate a fresh, clean, whole image of **only that
-prop**, fully visible on a plain white background in a three-quarter view. Remove the
-background with a background remover, then run an image-to-3D model such as TripoSG.
-The generated mesh is a **non-rendered reference only**, for proportions. The worker
-builds clean, low-poly, quad-based, UV-ready geometry over it. Never ship or decimate
-the generated mesh: it is triangle-dense and hard to texture. Scale the clean prop
-from the metric room or a known anchor in it, never from the generated mesh itself.
-Keep the generated reference out of acceptance renders and delivered piece files.
-
-Do **not** run image-to-3D on the whole mockup. Its scale is not metric, and a trial
-produced incorrect room proportions. Recover the room from the metric depth
-reconstruction and build the architectural geometry cleanly instead.
+crop the object out of the mockup. Use an image-editing model, with the mockup as
+reference, to generate a fresh, clean image of **only that prop**, fully visible on a
+plain white background in a three-quarter view. Remove the background, then run an
+image-to-3D model such as TripoSG. The generated mesh is a **non-rendered reference
+only**, for proportions: the worker builds clean, low-poly, quad-based, UV-ready geometry
+over it, scaled from the metric room or a known anchor, never from the mesh. Never ship
+or decimate it; keep it out of acceptance renders and delivered piece files. Do **not**
+run image-to-3D on the whole mockup: its scale is not metric and a trial produced
+incorrect room proportions. Recover the room from the metric depth reconstruction.
 
 **Build the clean blockout, then iterate by overlay.** With the hero camera established,
 place simple proxies using the metric room and known-size anchors. Compare against the
-original mockup before adding detail or dispatching pieces: verify camera/framing first,
-then proxy positions and silhouettes, until the main edges coincide. If a camera correction
-is needed, its owner updates the reconstruction and re-locks the shared frame before
-handoff. Use the same reference revision throughout. When skipping the optional image
-models, establish the camera and room from vanishing lines and measured anchors, then
-use the same blockout and overlay checks.
+original mockup before adding detail or dispatching pieces: camera/framing first, then
+proxy positions and silhouettes, until the main edges coincide. If a camera correction is
+needed, its owner updates the reconstruction and re-locks the shared frame before
+handoff. Use the same reference revision throughout. Without the optional image models,
+establish camera and room from vanishing lines and measured anchors, then use the same
+blockout and overlay checks.
 
 With a granted relay session, call `blender_render(camera="Hero", reference="<line media id>",
-overlay_opacity=0.5)`, fetch the returned media with `get_media`, and inspect it. Set the scene
-or explicit width/height to the reference aspect; the overlay renders at the reference's
-exact size and refuses an aspect mismatch beyond 0.5%. Relay references must be 16..2048
-pixels per side and fit the 700 KiB PNG transfer cap; upload a smaller reference if needed.
-For local Blender, use the reusable [overlay module recipe](../../partyline_relay/README.md#reference-overlays)
+overlay_opacity=0.5)` and inspect the media with `get_media`. Match the scene aspect to the
+reference (a mismatch beyond 0.5% is refused; references are 16..2048 px per side and fit
+a 700 KiB PNG). For local Blender, use the [overlay module recipe](../../partyline_relay/README.md#reference-overlays)
 from a `blender -b -P` script; select `proxies` for flat translucent colours and outlines.
-Keep overlays in a temp directory or upload them to the line, and inspect every iteration.
+Keep overlays in a temp directory or on the line, and inspect every iteration.
 
 An overlay constrains **2D silhouettes, not depth along the view axis**. Use known-size
 anchors such as door width, floor tiles and grates to measure lengths running away from
 the camera. AI mockups can be perspective-inconsistent: match the main features, document
-which anchors were used, and report the remaining pixel/scale residuals instead of distorting
-all geometry to force a perfect fit. Pieces judged from an unmatched camera drift.
+the anchors used, and report remaining pixel/scale residuals instead of distorting all
+geometry to force a perfect fit. Pieces judged from an unmatched camera drift.
 
 One named owner edits `master.blend`. It owns:
 
@@ -89,10 +81,9 @@ One named owner edits `master.blend`. It owns:
 - A blockout proxy for every piece, each in its own collection named exactly after
   that piece. Keep shared cameras and rig in separate master-owned collections.
 
-Size each proxy from the anchors above, not by eye. A proxy AABB is an envelope, and
-workers fill whatever box they get. Put silhouette architecture (chamfers, soffits,
-bulkheads, beams) in the blockout so neighbours such as cable runs are built against it;
-adding one late forces a neighbour to be rebuilt.
+Size each proxy from the anchors above, not by eye; workers fill whatever box they get.
+Put silhouette architecture (chamfers, soffits, bulkheads, beams) in the blockout so
+neighbours such as cable runs are built against it; adding one late forces a rebuild.
 
 Render and approve this blockout from the hero camera. Record each proxy's world-space
 axis-aligned bounding box as `min (x, y, z), max (x, y, z)` in metres, plus attachment
@@ -111,21 +102,23 @@ each prop cluster, cables and trays, decals and grime, and lighting. Prefer boun
 with explicit contact planes. Split a piece if it needs several unrelated modelling
 decisions; group small objects whose arrangement is the detail being judged.
 
-Create one task per piece and run independent tasks in parallel. Modest/cheaper implementers
-can handle tightly bounded asset briefs. Hard pieces (dense cable
-runs, architectural shells, hero props) need stronger implementers. After two weak
-rounds, or one far-off round, restaff with a stronger model and hand over the old script
-and review notes. Give every task the same
-master revision, its own output path, and the brief below. Workers never edit master or
-a neighbour's file. Workers with local Blender run in parallel. Relay tasks need separate
-permitted sessions/devices for simultaneous execution; a shared relay grant belongs to
-one agent and accepts one call at a time. With one relay session, serialize execution
-through its holder while workers prepare piece scripts and briefs independently. Acquire any declared
-Blender resource before using it, following [resource leases](https://github.com/High-AiQ/partyline/blob/main/docs/hierarchy.md#shared-resource-leases).
+Create one task per piece and run independent tasks in parallel. Modest/cheaper
+implementers can handle tightly bounded asset briefs. Hard pieces (dense cable runs,
+architectural shells, hero props) need stronger implementers. After two weak rounds, or
+one far-off round, restaff with a stronger model and hand over the old script and review
+notes. A piece whose review blocker list keeps growing (text objects exploding the
+triangle count, UI floating off its screen, detached parts) is often faster rebuilt from
+a tight brief, in parallel, than patched item by item; convert display text to textures,
+not text geometry. Give every task the same master revision, its own output path, and the
+brief below. Workers never edit master or a neighbour's file. Workers with local Blender run in
+parallel; relay tasks need separate permitted sessions/devices, since a shared relay
+grant belongs to one agent and accepts one call at a time (with one session, serialize
+execution through its holder while workers prepare scripts and briefs). Acquire any
+declared Blender resource first, following [resource leases](https://github.com/High-AiQ/partyline/blob/main/docs/hierarchy.md#shared-resource-leases).
 
 Express mode (no task review and no code gates) is suitable for asset pieces when enabled.
-In either mode,
-captain-reviewed renders gate the scene merge; express mode does not waive that check.
+In either mode, captain-reviewed renders gate the scene merge; express mode does not
+waive that check.
 
 ### Worked example: industrial sci-fi airlock
 
@@ -145,13 +138,39 @@ tasks; measure their actual bounds from the approved blockout before dispatch.
 | `decals_grime` | Localized labels, wear and dirt overlays on named accepted surfaces | Surface crops: scale, placement and wear density |
 | Lighting, master owner | World and rig in master; coordinate named practical emitters with pieces | Full frame: light direction, contrast and color |
 
-The shell owns the wall around the door; the door owns its frame and leaves. The
-window task owns the view through its aperture, not adjacent wall panels. The workbench
-task owns its prop arrangement, not the cart or crate. Set cable attachment points
-before parallel work. Do the decals/grime pass after target geometry is accepted;
-reference it read-only and keep overlays in that piece's collection. If surface material
-edits are needed, return them to the surface owner rather than silently duplicating it.
-Lighting is an integration task on master, not another worker editing master in parallel.
+The shell owns the wall around the door; the door owns its frame and leaves. The window
+task owns the view through its aperture, not adjacent wall panels. The workbench task
+owns its prop arrangement, not the cart or crate. Set cable attachment points before
+parallel work. Do the decals/grime pass after target geometry is accepted (see below):
+reference it read-only and keep overlays in that piece's collection; return surface
+material edits to the surface owner rather than silently duplicating it. Lighting is an
+integration task on master, not another worker editing master in parallel.
+
+## Surfaces, grime and materials
+
+Procedural noise alone gave soft, uniform blotches that never matched the reference's
+grime; surface detail needs image maps.
+
+- Generate tileable 2K maps with an open-licence image-generation model: colour overlay,
+  drip mask, edge-wear/chip mask, roughness variation, height/normal. Record provenance
+  (prompt, seed, hash, licence) next to the maps.
+- Build one reusable overlay node group per surface family (painted wall, bare metal)
+  that multiplies over each material's existing base colour, roughness and normal, applied
+  by a re-runnable script. Use world-space triplanar projection where the shell has only
+  box UVs. Replace a material's old blotch or rust layers rather than multiplying new
+  grime over them.
+- Grime follows geometry and physics. Drips start at real geometry: long upward AO under
+  lips, seams and panel tops. On vertical walls gate masks by the vertical weight
+  `1 - |N.z|`; a mask multiplied by the horizontal-surface weight silently vanished on
+  every wall. Painted walls get dirt, soot and oil runs; orange rust only on bare metal
+  (chipped rims, bolt heads, edges).
+- Judge drip length at real scale from the hero camera: 30-70 cm runs read as stripes,
+  8-20 cm right. Decide drips versus rust per wall with the person.
+- Diagnose before retuning a material that "looks too light". Volumetric haze lifts dark
+  albedo (about +0.08 sRGB in one build) and sheen or specular lobes grey out dark fabric.
+  Render diffuse-only and per-light passes and measure patch means first. Use light
+  linking to exclude one object from one practical light instead of dimming the light for
+  everything. Change one variable per round.
 
 ## Piece file contract
 
@@ -171,11 +190,10 @@ Lighting is an integration task on master, not another worker editing master in 
   or emissive panels only when its brief names them and their intended contribution.
   Do not add compensating fill lights or change exposure to make a piece pass.
 
-Keep neighbouring proxies, master rig and other preview-only context out of the
-delivered piece file. Assemble a temporary preview from a copy of the frozen master,
-replace only this piece's proxy with its linked collection, and leave other proxies
-visible. The master owner can do this for a worker using the shared session. Never save
-that preview over master or deliver it as the single-collection piece.
+Keep neighbouring proxies, master rig and other preview-only context out of the delivered
+piece file. Assemble a temporary preview from a copy of the frozen master, replace only
+this piece's proxy with its linked collection, and leave other proxies visible; the master
+owner can do this for a worker. Never save that preview over master or deliver it.
 
 ## Brief every piece
 
@@ -201,15 +219,13 @@ Handoff: piece path/revision, dependencies, images incl. a side-by-side of rende
 
 For example, a `cart` brief could specify proxy min `(1.6, -0.8, 0.0)` and max
 `(2.6, 0.0, 1.1)` m; wheel contact at Z=0 within 0.005 m; at least 0.10 m clearance
-from the crate proxy; scope of two shelves, rails, four wheels and the visible contents;
-no floor, crate, bench or lighting. Set 40,000 evaluated triangles, at most two 2048²
-RGBA textures and 64 MiB decoded texture memory including mipmaps. For an illustrative
-1600×900 reference, assign crop `(1040, 490, 1510, 870)`; replace these coordinates with
-the actual cart crop. Require matching wheel silhouette, rail thickness and shelf spacing
-in the hero view, a close-up resolving joints and contents, and no unnamed emitters.
-The task receives the frozen master and reference identifiers alongside these values.
-Without real sizes, a 4.5 m × 0.95 m bench slot gave every modeller a too-long, too-low
-bench; the brief should state the true run, top height and depth, and that it fits.
+from the crate proxy; two shelves, rails, four wheels and the visible contents; no floor,
+crate, bench or lighting; 40,000 evaluated triangles, two 2048² RGBA textures, 64 MiB
+decoded texture memory including mipmaps; crop `(1040, 490, 1510, 870)` of an
+illustrative 1600×900 reference (use the actual crop). Require matching wheel silhouette,
+rail thickness and shelf spacing in the hero view, a close-up resolving joints and
+contents, and no unnamed emitters. Without real sizes, a 4.5 m × 0.95 m bench slot gave
+every modeller a too-long, too-low bench: state the true run, top height and depth.
 
 ## Review, replace, and finish
 
@@ -218,11 +234,11 @@ bench; the brief should state the true run, top height and depth, and that it fi
    Reopen the delivered file to confirm it works independently of the worker's session.
 2. Make the temporary context preview. Use `blender_render` with the locked hero camera
    and master look, then a close-up camera without changing the hero camera. Workbench
-   is useful for geometry checks; use EEVEE for material and lighting review. Record
-   returned settings/clamps, keep the reference aspect ratio, and inspect both images.
-   Repeat the same reference overlay on the hero-camera preview; compare the assigned
-   pixel rectangle with the matching reference crop without reframing the hero camera.
-   Captain approval covers the named crop, silhouette, detail, materials and interfaces.
+   suits geometry checks; use EEVEE for material and lighting review. Record returned
+   settings/clamps, keep the reference aspect ratio, and inspect both images. Repeat the
+   reference overlay on the hero preview and compare the assigned pixel rectangle with
+   the matching reference crop. Captain approval covers the named crop, silhouette,
+   detail, materials and interfaces.
 3. The master owner replaces the approved proxy collection with the piece collection:
    **link for iteration**. Remove/unlink the proxy from the render scene; do not render
    both. Use the saved proxy bounds as the baseline. Keep the inserted collection in
@@ -231,27 +247,31 @@ bench; the brief should state the true run, top height and depth, and that it fi
    Keep integration re-runnable: one script swaps a single piece in by name and
    re-applies the integration fixes and the rig.
 4. Use `blender_scene_info` to check scale and placement against recorded proxy bounds
-   and inspect possible overlaps with neighbours. Use targeted `blender_exec` for bounds
-   or contact tests the relay does not expose. Bounding-box intersections are candidates,
-   not proof of mesh penetration: inspect contacts, intended seams and clearances in
-   close-ups and `blender_screenshot`. Check practical lights for doubled illumination.
+   and inspect possible overlaps. Use targeted `blender_exec` for bounds or contact tests
+   the relay does not expose. Bounding-box intersections are candidates, not proof of
+   penetration: inspect contacts, seams and clearances in close-ups and
+   `blender_screenshot`. Check practical lights for doubled illumination.
 5. Render the assembled scene from the hero camera and compare the full reference and
    named crops at matching aspect ratio. Review in order: camera and composition first,
    then light, then materials; also scale, silhouettes and local details. Keep the
    grade neutral and make warmth or coolness local to the lights; a global cast flattens
-   the palette. Reopen a failing piece **alone**, with concrete
-   render findings; keep accepted neighbours fixed. Global camera/look issues go to
-   the master owner. Replace revised links and repeat the affected checks and final render.
+   the palette. Reopen a failing piece **alone**, with concrete render findings; keep
+   accepted neighbours fixed. Global camera/look issues go to the master owner. Replace
+   revised links and repeat the affected checks and final render. Every requested change
+   must be obvious in the hero render: each round delivers a before/after side by side and
+   numbers (patch means, lengths, hero mean exposure), not just "adjusted".
 6. For the final deliverable, **append and make local** the accepted collections and
    their dependencies, replacing the iteration links rather than adding duplicate copies.
-   Remove obsolete proxy datablocks that would cause collection-name suffixes. Pack assets
-   or resolve their delivered relative paths, and remove preview-only checking cameras.
-   Reopen the final master, verify no missing resources,
-   and render again to confirm the localized assembly matches the approved linked one.
+   Remove obsolete proxy datablocks that would cause collection-name suffixes, and
+   preview-only checking cameras. Pack every image and confirm there are no linked
+   libraries. Copy the `.blend` alone into an empty folder and render a low-sample frame:
+   no missing files, no pink, and a match to the approved linked render. Ship a README
+   with the active camera, render settings (engine, samples, denoiser, view transform,
+   compositor), the piece list, texture provenance and a mockup-versus-final side by side.
 
 Keep a manifest of master revision, piece paths/revisions, saved proxy bounds, briefs,
 render references and captain decisions so one piece can be rebuilt without rediscovery.
 Store final `.blend` files and dependencies in the intended durable asset location and
 verify read-back before cleanup. This public repository receives only text instructions
 or source snippets: **commit no images, textures, renders or `.blend` files**. Upload
-review images to the line or stage them in a temp directory; share host-relative media URLs.
+review images to the line or a temp directory; share host-relative media URLs.
