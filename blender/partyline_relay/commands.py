@@ -12,6 +12,9 @@ import sys
 import traceback
 from pathlib import Path
 
+from .render import render
+from .screenshot import screenshot
+
 MAX_CODE = 65536
 TAIL = 4096
 MARK = "\n...[truncated]...\n"
@@ -19,6 +22,7 @@ HEAD = 16384 - TAIL - len(MARK)  # head + marker + tail never exceed 16384 chara
 TRACEBACK = 4096
 RESULT = 4096
 SCENE_CAP = 16384
+MEDIA = {"render": render, "screenshot": screenshot}
 
 
 PLAIN = (str, int, float, bool, type(None))
@@ -263,6 +267,8 @@ def execute(bpy, relay, call):
             return scene_info(bpy, call.args)
         if call.op == "backup":
             return backup(bpy)
+        if call.op in MEDIA:
+            return MEDIA[call.op](bpy, relay, call)
         return {"ok": False, "error": failure("BadOp", f"unknown op {call.op!r}")}
     except Exception as exc:  # noqa: BLE001 - a bad command must not kill the timer
         return {"ok": False, "error": failure(type(exc).__name__, exc, traceback.format_exc())}

@@ -56,7 +56,9 @@ class RelayCase(unittest.TestCase):
             payload = body if isinstance(body, bytes) else json.dumps(body or {}).encode()
             conn.request(method, path, payload if method == "POST" else None, head)
             response = conn.getresponse()
-            out["status"], out["body"] = response.status, json.loads(response.read() or b"{}")
+            raw = response.read()
+            binary = response.getheader("Content-Type") == "application/octet-stream"
+            out["status"], out["body"] = response.status, raw if binary else json.loads(raw or b"{}")
             conn.close()
 
         thread = threading.Thread(target=send)

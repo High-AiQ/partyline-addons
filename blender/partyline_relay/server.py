@@ -20,7 +20,7 @@ from .state import Conflict, Relay
 MAX_BODY = 128 * 1024
 TICK = 0.05
 JOB_WAIT = 60.0            # a backup of a large file may take a while
-OPS = ("exec", "scene_info")
+OPS = ("exec", "scene_info", "render", "screenshot")
 DEFAULT_TIMEOUT, MIN_TIMEOUT, MAX_TIMEOUT = 20, 1, 120
 
 
@@ -115,7 +115,7 @@ def route_call(svc, body):
     sid, call_id, op = text(body, "session"), text(body, "call_id"), body.get("op")
     args, timeout = body.get("args", {}), body.get("timeout", DEFAULT_TIMEOUT)
     if op not in OPS or not isinstance(args, dict):
-        raise BadRequest("op must be exec or scene_info, with an args object")
+        raise BadRequest("op must be exec, scene_info, render or screenshot, with an args object")
     if isinstance(timeout, bool) or not isinstance(timeout, int | float):
         raise BadRequest("timeout must be a number of seconds")
     if op == "exec":
@@ -127,13 +127,22 @@ def route_call(svc, body):
     return svc.relay.submit(sid, call_id, op, args, max(MIN_TIMEOUT, min(MAX_TIMEOUT, timeout)))
 
 
+def route_artifact(svc, body):
+    """The bytes of an image the session rendered, once. 200 carries raw bytes, anything else a message."""
+    sid, session = text(body, "session"), svc.relay.session
+    if session is None or session.id != sid or not svc.relay.alive(session):
+        return 404, {"error": "unknown session"}
+    status, data = svc.relay.artifacts.take(sid, text(body, "id"))
+    return (200, data) if status == 200 else (status, {"error": data.decode()})
+
+
 def route_cancel(svc, body):
     return svc.relay.cancel(text(body, "session"), text(body, "call_id"))
 
 
 ROUTES = {("GET", "/status"): route_status, ("POST", "/session"): route_open,
           ("POST", "/session/renew"): route_renew, ("POST", "/session/close"): route_close,
-          ("POST", "/call"): route_call, ("POST", "/cancel"): route_cancel}
+          ("POST", "/call"): route_call, ("POST", "/artifact"): route_artifact, ("POST", "/cancel"): route_cancel}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -143,9 +152,11 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def reply(self, status, body):
-        data = json.dumps(body).encode()
+        raw = isinstance(body, bytes)
+        data = body if raw else json.dumps(body).encode()
         self.send_response(status)
-        for name, value in (("Content-Type", "application/json"), ("Content-Length", str(len(data))),
+        for name, value in (("Content-Type", "application/octet-stream" if raw else "application/json"),
+                            ("Content-Length", str(len(data))),
                             ("Cache-Control", "no-store")):  # deliberately no CORS headers
             self.send_header(name, value)
         self.end_headers()
@@ -236,6 +247,7 @@ class Service:
 
     def stop(self):
         self.relay.end("closed")
+        self.relay.artifacts.clear()
         if self.http:
             self.http.shutdown()
             self.http.server_close()

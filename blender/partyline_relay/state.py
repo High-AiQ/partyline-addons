@@ -7,6 +7,8 @@ import queue
 import threading
 import time
 
+from .artifacts import Artifacts
+
 LEASE = 15.0     # seconds without a renewal before the session fails closed
 GRACE = 1.0      # extra seconds the HTTP thread waits past a call's deadline
 GONE = ("blender", "lease")
@@ -44,6 +46,7 @@ class Relay:
         self.busy = False      # a call is queued, running or overran
         self.gone = {}         # session id -> why it ended (blender | lease), for the helper's renew
         self.version = 0       # bumped whenever the session appears or disappears
+        self.artifacts = Artifacts()
 
     def alive(self, session):
         """Lock-free, so the tracer can call it on every line."""
@@ -61,6 +64,7 @@ class Relay:
             if session is None:
                 return None
             session.ended, session.namespace = reason, None
+            self.artifacts.drop(session.id)
             if session.current:
                 session.current.cancel.set()
             if reason in GONE:
