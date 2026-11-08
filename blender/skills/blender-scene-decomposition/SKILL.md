@@ -11,8 +11,10 @@ local details. The captain owns composition and integration; piece tasks own det
 
 Read [local tools](https://github.com/High-AiQ/partyline/blob/main/docs/local-tools.md) for the working tool contract and
 [Blender Python relay](https://github.com/High-AiQ/partyline/blob/main/docs/design/blender-python-relay.md) for design context.
-Use `blender_request` and wait for a granted session before Blender calls. Use
-`blender_exec` for bounded modelling, file and collection operations;
+When the host has Blender and the deliverable is files, workers run it locally
+(`blender -b <file> -P <script.py>`); no relay session is needed. The relay is for a
+paired person's machine: use `blender_request` and wait for a granted session before
+relay calls. Use `blender_exec` for bounded modelling, file and collection operations;
 `blender_scene_info` for inspection; `blender_render` for acceptance images; and
 `blender_screenshot` for viewport inspection. A viewport capture supplements the renders.
 Fetch returned image references with `get_media` and look at the pixels.
@@ -25,6 +27,12 @@ render first. Identify visible silhouettes, interfaces, material families, and d
 priorities at the intended output resolution. Resolve ambiguous major shapes before
 dispatching pieces; document assumptions about unseen surfaces.
 
+**Camera first.** Match the hero camera to the reference before any blockout. Find
+scale anchors (door, ceiling, a 1.75 m person, a ~0.9-1.0 m worktop, standard furniture)
+and the vanishing lines, set the camera, then overlay the blockout render on the
+reference at the same aspect and correct until anchors and edges coincide. Pieces judged
+from an unmatched camera drift, and the framing then only gets fixed at integration.
+
 One named owner edits `master.blend`. It owns:
 
 - The locked hero camera: world transform, lens or orthographic scale, sensor fit,
@@ -32,8 +40,15 @@ One named owner edits `master.blend`. It owns:
 - Metric units with `scale_length = 1`: **1 BU = 1 m**, Z up, a documented origin,
   floor height and wall planes.
 - World, lighting rig, render settings, color management and the overall look.
+  Calibrate the rig early to the reference's mean luminance (measure both renders);
+  pieces judge colour at that exposure. A placeholder two stops hot misled every piece.
 - A blockout proxy for every piece, each in its own collection named exactly after
   that piece. Keep shared cameras and rig in separate master-owned collections.
+
+Size each proxy from the anchors above, not by eye. A proxy AABB is an envelope, and
+workers fill whatever box they get. Put silhouette architecture (chamfers, soffits,
+bulkheads, beams) in the blockout so neighbours such as cable runs are built against it;
+adding one late forces a neighbour to be rebuilt.
 
 Render and approve this blockout from the hero camera. Record each proxy's world-space
 axis-aligned bounding box as `min (x, y, z), max (x, y, z)` in metres, plus attachment
@@ -53,12 +68,15 @@ with explicit contact planes. Split a piece if it needs several unrelated modell
 decisions; group small objects whose arrangement is the detail being judged.
 
 Create one task per piece and run independent tasks in parallel. Modest implementers
-such as deepseek-flash can handle tightly bounded asset briefs. Give every task the same
+such as deepseek-flash can handle tightly bounded asset briefs. Hard pieces (dense cable
+runs, architectural shells, hero props) need stronger implementers. After two weak
+rounds, or one far-off round, restaff with a stronger model and hand over the old script
+and review notes. Give every task the same
 master revision, its own output path, and the brief below. Workers never edit master or
-a neighbour's file. Parallel tasks require separate permitted Blender sessions/devices
-for simultaneous tool execution; a shared relay grant belongs to one agent and accepts
-one call at a time. With one Blender session, serialize execution through its holder
-while workers prepare piece scripts and briefs independently. Acquire any declared
+a neighbour's file. Workers with local Blender run in parallel. Relay tasks need separate
+permitted sessions/devices for simultaneous execution; a shared relay grant belongs to
+one agent and accepts one call at a time. With one relay session, serialize execution
+through its holder while workers prepare piece scripts and briefs independently. Acquire any declared
 Blender resource before using it, following [resource leases](https://github.com/High-AiQ/partyline/blob/main/docs/hierarchy.md#shared-resource-leases).
 
 Express mode (no task review and no code gates) is suitable for asset pieces **once that
@@ -124,13 +142,17 @@ Piece / owner / output: <name>, task owner, pieces/<name>.blend
 Master revision / reference: frozen master path or id; reference id, dimensions, revision
 Scope: owned geometry, materials, details and named practical lights (or none)
 Bounds: proxy world min (x, y, z), max (x, y, z), metres
+Real size: key dimensions (run length, top height, depth); asset fills or fits within box
+Looks like: "what good looks like" paragraph from the reference crop: shapes,
+            materials, wear, colours
 Interfaces: contact planes, attachment points, clearance and numerical tolerances
 Exclusions: neighbouring pieces and shared camera/world/rig changes
 Budget: evaluated triangle cap; texture count, maximum dimensions and total memory
 Reference crop: pixel rectangle (left, top, right, bottom), origin at image top-left
 Acceptance: full hero-camera render with other proxies visible, plus one close-up;
             named visual features to match, contact/bounds checks and budget report
-Handoff: piece path/revision, dependencies, images, measured bounds, remaining limitations
+Handoff: piece path/revision, dependencies, images incl. a side-by-side of render vs
+         reference crop, measured bounds, remaining limitations
 ```
 
 For example, a `cart` brief could specify proxy min `(1.6, -0.8, 0.0)` and max
@@ -142,6 +164,8 @@ RGBA textures and 64 MiB decoded texture memory including mipmaps. For an illust
 the actual cart crop. Require matching wheel silhouette, rail thickness and shelf spacing
 in the hero view, a close-up resolving joints and contents, and no unnamed emitters.
 The task receives the frozen master and reference identifiers alongside these values.
+Without real sizes, a 4.5 m × 0.95 m bench slot gave every modeller a too-long, too-low
+bench; the brief should state the true run, top height and depth, and that it fits.
 
 ## Review, replace, and finish
 
@@ -158,14 +182,18 @@ The task receives the frozen master and reference identifiers alongside these va
    both. Use the saved proxy bounds as the baseline. Keep the inserted collection in
    world coordinates with no move, rotation, scale compensation or instance offset.
    Exclude the piece's checking camera from assembly use and retain master's active camera.
+   Keep integration re-runnable: one script swaps a single piece in by name and
+   re-applies the integration fixes and the rig.
 4. Use `blender_scene_info` to check scale and placement against recorded proxy bounds
    and inspect possible overlaps with neighbours. Use targeted `blender_exec` for bounds
    or contact tests the relay does not expose. Bounding-box intersections are candidates,
    not proof of mesh penetration: inspect contacts, intended seams and clearances in
    close-ups and `blender_screenshot`. Check practical lights for doubled illumination.
 5. Render the assembled scene from the hero camera and compare the full reference and
-   named crops at matching aspect ratio. Judge composition, scale, silhouettes, local
-   details, materials and light together. Reopen a failing piece **alone**, with concrete
+   named crops at matching aspect ratio. Review in order: camera and composition first,
+   then light, then materials; also scale, silhouettes and local details. Keep the
+   grade neutral and make warmth or coolness local to the lights; a global cast flattens
+   the palette. Reopen a failing piece **alone**, with concrete
    render findings; keep accepted neighbours fixed. Global camera/look issues go to
    the master owner. Replace revised links and repeat the affected checks and final render.
 6. For the final deliverable, **append and make local** the accepted collections and
