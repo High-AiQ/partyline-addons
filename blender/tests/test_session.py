@@ -65,7 +65,7 @@ class Sessions(RelayCase):
         call = lambda args: self.request("POST", "/call", {  # noqa: E731
             "session": "s1", "call_id": "i", "op": "scene_info", "args": args})
         status, body = call({})
-        self.assertEqual((status, body["ok"], body["scene"]["object_count"]), (200, True, 2))
+        self.assertEqual((status, body["ok"], body["scene"]["object_count"]), (200, True, 4))
         self.assertEqual(body["scene"]["camera"], "Camera")
         objects = call({"detail": "objects"})[1]["scene"]["objects"]
         self.assertEqual(objects[0]["bbox"], {"min": [-1.0] * 3, "max": [1.0] * 3})

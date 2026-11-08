@@ -36,12 +36,22 @@ settings. It does nothing until the Partyline helper on this computer opens a se
   deliberately catches every `BaseException` in a loop (a bare `except:`) can outlive its deadline; the session then
   stays busy and the remedy is closing Blender. A script's own `__repr__` runs under the same deadline, while an
   error's text is built from its plain arguments and never calls the script's `__str__`.
+* **Renders and screenshots** (`render.py`, `screenshot.py`): the agent may ask for an image, never for a path. Width
+  and height are clamped to 16..2048, EEVEE samples to 1..64, the frame to the scene's range, and every clamp is
+  reported back; the engine is Workbench (default) or EEVEE, never Cycles. The camera is selected for the render only
+  and every setting is put back. The image is written to a private temp directory under a random id and handed to
+  the helper once (`POST /artifact`, same secret, session and Host checks); it is deleted when fetched, when the
+  session ends and when the add-on stops, and at most 8 unfetched images are kept. A render is one long C call: the
+  deadline, a cancel and a killed session take effect when it returns, and the image is then discarded, not handed
+  over. `screenshot` draws the 3D viewport with `gpu.types.GPUOffScreen` (needs the GPU; up to 1600 px on the long
+  edge); for the whole window use Partyline's `screen_frame`.
 * Telemetry: none. Nothing leaves this computer from the add-on.
 
 ## HTTP API (for the helper)
 
 `GET /status`; `POST /session` `{id, agent, checker}`, `/session/renew`, `/session/close`, `/call` `{session,
-call_id, op: "exec"|"scene_info", args, timeout}`, `/cancel`. JSON in and out; see `server.py`.
+call_id, op: "exec"|"scene_info"|"render"|"screenshot", args, timeout}`, `/artifact` `{session, id}` (the image
+bytes, once), `/cancel`. JSON in and out except the image; see `server.py`.
 
 ## Credits
 
