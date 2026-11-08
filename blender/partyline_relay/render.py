@@ -41,7 +41,11 @@ def applied(changes):
     old = []
     try:
         for obj, attr, value in changes:
-            old.append((obj, attr, getattr(obj, attr)))
+            previous = getattr(obj, attr)
+            # bpy_prop_array is a live view: snapshot it before assigning a new colour.
+            if type(previous).__name__ == "bpy_prop_array" or isinstance(previous, list | tuple):
+                previous = previous[:]
+            old.append((obj, attr, previous))
             setattr(obj, attr, value)
         yield
     finally:
@@ -62,6 +66,17 @@ def pick_camera(scene, name):
         raise Refused("NoCamera", f"no camera named {name!r} (cameras: "
                       f"{', '.join(c.name for c in cameras[:LISTED]) or 'none'})")
     return found
+
+
+def frame_size(scene, args):
+    """The intended frame before per-axis render clamps; explicit sizes describe square pixels."""
+    out = scene.render
+    width = args.get("width", out.resolution_x * out.resolution_percentage // 100)
+    height = args.get("height", out.resolution_y * out.resolution_percentage // 100)
+    if "width" not in args and "height" not in args:
+        width *= getattr(out, "pixel_aspect_x", 1)
+        height *= getattr(out, "pixel_aspect_y", 1)
+    return width, height
 
 
 def plan(scene, args):
@@ -117,6 +132,10 @@ def render(bpy, relay, call):
         settings, changes, frame, adjusted = plan(scene, call.args)
     except Refused as exc:
         return error(exc.kind, exc)
+    overlay_args = call.args
+    if "reference" in call.args:
+        width, height = frame_size(scene, call.args)
+        overlay_args = {**call.args, "width": width, "height": height}
     artifact, path = relay.artifacts.new(call.session.id)
     started, before = relay.clock(), scene.frame_current
     try:
@@ -124,12 +143,25 @@ def render(bpy, relay, call):
             if frame is not None and frame != before:
                 scene.frame_set(frame)
             try:
-                bpy.ops.render.render(write_still=False)
+                if "reference" in call.args:
+                    from .overlay import relay_overlay
+                    overlay_size = relay_overlay(bpy, overlay_args, path)
+                else:
+                    bpy.ops.render.render(write_still=False)
             finally:
                 if scene.frame_current != before:
                     scene.frame_set(before)
-            bpy.data.images["Render Result"].save_render(str(path), scene=scene)
+            if "reference" not in call.args:
+                bpy.data.images["Render Result"].save_render(str(path), scene=scene)
+            else:
+                adjusted = [a for a in adjusted if not a.startswith(("width ", "height "))]
+                for axis, used in zip(("width", "height"), overlay_size):
+                    wanted = overlay_args[axis]
+                    if wanted != used:
+                        adjusted.append(f"{axis} {wanted} -> {used} (reference resolution)")
+                    settings[axis] = used
+                settings["overlay_opacity"] = call.args.get("overlay_opacity", 0.5)
     except Exception as exc:  # noqa: BLE001 - Blender reports a failed render (no GPU, no camera) as RuntimeError
         relay.artifacts.discard(artifact, path)
-        return error(type(exc).__name__, f"render failed: {exc}")
+        return error(exc.kind if isinstance(exc, Refused) else type(exc).__name__, f"render failed: {exc}")
     return deliver(relay, call, artifact, path, settings, adjusted, started)

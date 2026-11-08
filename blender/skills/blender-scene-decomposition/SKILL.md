@@ -27,11 +27,25 @@ render first. Identify visible silhouettes, interfaces, material families, and d
 priorities at the intended output resolution. Resolve ambiguous major shapes before
 dispatching pieces; document assumptions about unseen surfaces.
 
-**Camera first.** Match the hero camera to the reference before any blockout. Find
-scale anchors (door, ceiling, a 1.75 m person, a ~0.9-1.0 m worktop, standard furniture)
-and the vanishing lines, set the camera, then overlay the blockout render on the
-reference at the same aspect and correct until anchors and edges coincide. Pieces judged
-from an unmatched camera drift, and the framing then only gets fixed at integration.
+**Camera first, then proxies.** Match the hero camera to the reference's vanishing
+lines and known-size anchors, then place simple proxies. Iterate by reference overlay
+before adding detail or dispatching pieces: camera/framing first, then proxy positions
+and silhouettes, until the main edges coincide. Use the same reference revision throughout.
+
+With a granted relay session, call `blender_render(camera="Hero", reference="<line media id>",
+overlay_opacity=0.5)`, fetch the returned media with `get_media`, and inspect it. Set the scene
+or explicit width/height to the reference aspect; the overlay renders at the reference's
+exact size and refuses an aspect mismatch beyond 0.5%. Relay references must be 16..2048
+pixels per side and fit the 700 KiB PNG transfer cap; upload a smaller reference if needed.
+For local Blender, use the reusable [overlay module recipe](../../partyline_relay/README.md#reference-overlays)
+from a `blender -b -P` script; select `proxies` for flat translucent colours and outlines.
+Keep overlays in a temp directory or upload them to the line, and inspect every iteration.
+
+An overlay constrains **2D silhouettes, not depth along the view axis**. Use known-size
+anchors such as door width, floor tiles and grates to measure lengths running away from
+the camera. AI mockups can be perspective-inconsistent: match the main features, document
+which anchors were used, and report the remaining pixel/scale residuals instead of distorting
+all geometry to force a perfect fit. Pieces judged from an unmatched camera drift.
 
 One named owner edits `master.blend`. It owns:
 
@@ -67,8 +81,8 @@ each prop cluster, cables and trays, decals and grime, and lighting. Prefer boun
 with explicit contact planes. Split a piece if it needs several unrelated modelling
 decisions; group small objects whose arrangement is the detail being judged.
 
-Create one task per piece and run independent tasks in parallel. Modest implementers
-such as deepseek-flash can handle tightly bounded asset briefs. Hard pieces (dense cable
+Create one task per piece and run independent tasks in parallel. Modest/cheaper implementers
+can handle tightly bounded asset briefs. Hard pieces (dense cable
 runs, architectural shells, hero props) need stronger implementers. After two weak
 rounds, or one far-off round, restaff with a stronger model and hand over the old script
 and review notes. Give every task the same
@@ -79,8 +93,8 @@ one agent and accepts one call at a time. With one relay session, serialize exec
 through its holder while workers prepare piece scripts and briefs independently. Acquire any declared
 Blender resource before using it, following [resource leases](https://github.com/High-AiQ/partyline/blob/main/docs/hierarchy.md#shared-resource-leases).
 
-Express mode (no task review and no code gates) is suitable for asset pieces **once that
-mode exists and is enabled**. Until then use the normal task lifecycle. In either mode,
+Express mode (no task review and no code gates) is suitable for asset pieces when enabled.
+In either mode,
 captain-reviewed renders gate the scene merge; express mode does not waive that check.
 
 ### Worked example: industrial sci-fi airlock
@@ -176,6 +190,8 @@ bench; the brief should state the true run, top height and depth, and that it fi
    and master look, then a close-up camera without changing the hero camera. Workbench
    is useful for geometry checks; use EEVEE for material and lighting review. Record
    returned settings/clamps, keep the reference aspect ratio, and inspect both images.
+   Repeat the same reference overlay on the hero-camera preview; compare the assigned
+   pixel rectangle with the matching reference crop without reframing the hero camera.
    Captain approval covers the named crop, silhouette, detail, materials and interfaces.
 3. The master owner replaces the approved proxy collection with the piece collection:
    **link for iteration**. Remove/unlink the proxy from the render scene; do not render
@@ -208,4 +224,4 @@ render references and captain decisions so one piece can be rebuilt without redi
 Store final `.blend` files and dependencies in the intended durable asset location and
 verify read-back before cleanup. This public repository receives only text instructions
 or source snippets: **commit no images, textures, renders or `.blend` files**. Upload
-review images to the line or stage them in `/var/tmp`; share host-relative media URLs.
+review images to the line or stage them in a temp directory; share host-relative media URLs.

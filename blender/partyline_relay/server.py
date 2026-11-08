@@ -17,7 +17,8 @@ from socketserver import TCPServer
 from . import commands
 from .state import Conflict, Relay
 
-MAX_BODY = 128 * 1024
+# Includes base64 reference plus metadata; the helper-compatible PNG cap is 700 KiB.
+MAX_BODY = 3 * 1024 * 1024
 TICK = 0.05
 JOB_WAIT = 60.0            # a backup of a large file may take a while
 OPS = ("exec", "scene_info", "render", "screenshot")
