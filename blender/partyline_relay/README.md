@@ -63,6 +63,44 @@ For parallel scene building, use the [Blender scene decomposition skill](../skil
 call_id, op: "exec"|"scene_info"|"render"|"screenshot", args, timeout}`, `/artifact` `{session, id}` (the image
 bytes, once), `/cancel`. JSON in and out except the image; see `server.py`.
 
+## Reference overlays
+
+`blender_render(reference="<line media id>", overlay_opacity=0.5, camera="Hero")`
+stores the overlay as the returned media. Partyline resolves only an image on the caller's line,
+converts it to PNG and sends inline `reference: {id, png_base64}` to the relay. The source is
+at most 20 MiB, the transferred PNG at most 700 KiB, and each side must be 16..2048 pixels.
+The 700 KiB cap keeps base64 plus the envelope below installed helpers' 1,000,000-byte
+receive limit; no helper update is needed. The add-on HTTP body limit is 3 MiB, and the
+server checks the full outgoing message size before sending. References are never silently resized.
+Upload a smaller reference when a cap is exceeded.
+The render uses the reference's exact resolution and square pixels; a camera frame aspect
+(the unclamped scene resolution, percentage and pixel aspect, or explicit square-pixel width/height)
+differing by more than 0.5% is refused. Match the camera
+frame deliberately before trying again. The transparent render is alpha-composited over the
+reference; `overlay_opacity` is a finite number in 0..1, default 0.5. Cancel, deadline, frame,
+sample clamps and artifact cleanup behave as for ordinary renders.
+
+For a plain `blender -b scene.blend -P overlay_script.py`, put this repository's `blender/`
+directory on the script's Python import path (or import the installed extension's module):
+
+```python
+import bpy
+from partyline_relay.overlay import render_overlay
+
+render_overlay(bpy, "reference.png", camera="Hero", output="overlay.png",
+               overlay_opacity=0.5,
+               proxies=[obj for obj in bpy.context.scene.objects if obj.type == "MESH"])
+```
+
+Omit `proxies` to render the scene normally. A proxy selection temporarily hides other geometry,
+uses flat per-object colours, semi-transparent faces (default `proxy_opacity=0.35`) and dark
+outlines. The camera, colours, visibility and render settings are restored even on failure;
+no scene is saved. The implementation uses only `bpy` images and Blender's bundled numpy.
+Omit `output` to receive a new image datablock; the caller must remove it when finished.
+Standalone scripts can use larger references; `bounded=True` opts into relay size limits.
+An overlay constrains silhouettes in the image, not depth along the view axis: retain measured
+size anchors and report perspective inconsistencies in the reference.
+
 ## Credits
 
 The pattern of a socket thread feeding a queue that one main-thread `bpy.app.timers` callback drains, the structured
