@@ -27,10 +27,47 @@ render first. Identify visible silhouettes, interfaces, material families, and d
 priorities at the intended output resolution. Resolve ambiguous major shapes before
 dispatching pieces; document assumptions about unseen surfaces.
 
-**Camera first, then proxies.** Match the hero camera to the reference's vanishing
-lines and known-size anchors, then place simple proxies. Iterate by reference overlay
-before adding detail or dispatching pieces: camera/framing first, then proxy positions
-and silhouettes, until the main edges coincide. Use the same reference revision throughout.
+The image-model steps below are **optional external preparation**, not part of the
+add-on. When using them, follow this order and retain the exact mockup as the final
+composition reference.
+
+**Room and camera.** Give the exact mockup to an image-editing model and ask it to
+remove all furniture, props, cables and loose items while keeping the camera angle,
+framing, resolution and architecture identical. Overlay the empty-room edit on the
+original at identical resolution: wall, floor, ceiling and door edges must coincide.
+Reject and redo an edit that moves those edges before using it for measurements.
+
+Run a single-image metric depth/camera model such as MoGe-2 on the **empty room**.
+Use its depth and camera estimates to recover the FOV and camera pose, fit the floor,
+wall and ceiling planes, and measure room dimensions. Check the metric scale against
+a known-size architectural anchor and record the estimated dimensions and uncertainty.
+Lock the hero camera from this reconstruction. Use the empty room because props occlude
+the architectural planes and corrupt the plane fits; do not estimate the room from a
+furnished reconstruction and assume its planes are reliable.
+
+**Prop references (optional).** If an image-to-3D reference would help a piece, never
+crop that object out of the mockup for the model. Instead, use an image-editing model,
+with the mockup as reference, to generate a fresh, clean, whole image of **only that
+prop**, fully visible on a plain white background in a three-quarter view. Remove the
+background with a background remover, then run an image-to-3D model such as TripoSG.
+The generated mesh is a **non-rendered reference only**, for proportions. The worker
+builds clean, low-poly, quad-based, UV-ready geometry over it. Never ship or decimate
+the generated mesh: it is triangle-dense and hard to texture. Scale the clean prop
+from the metric room or a known anchor in it, never from the generated mesh itself.
+Keep the generated reference out of acceptance renders and delivered piece files.
+
+Do **not** run image-to-3D on the whole mockup. Its scale is not metric, and a trial
+produced incorrect room proportions. Recover the room from the empty-room metric
+reconstruction and build the architectural geometry cleanly instead.
+
+**Build the clean blockout, then iterate by overlay.** With the hero camera established,
+place simple proxies using the metric room and known-size anchors. Compare against the
+original mockup before adding detail or dispatching pieces: verify camera/framing first,
+then proxy positions and silhouettes, until the main edges coincide. If a camera correction
+is needed, its owner updates the reconstruction and re-locks the shared frame before
+handoff. Use the same reference revision throughout. When skipping the optional image
+models, establish the camera and room from vanishing lines and measured anchors, then
+use the same blockout and overlay checks.
 
 With a granted relay session, call `blender_render(camera="Hero", reference="<line media id>",
 overlay_opacity=0.5)`, fetch the returned media with `get_media`, and inspect it. Set the scene
